@@ -173,6 +173,29 @@ Every doubt is tagged with one operator (shipped as data in
 
 ---
 
+## Part of a bigger idea — meet The Asker
+
+Descartes has a sibling: **[The Asker](https://github.com/pranjalbhatia710/the-asker)**
+— *"Today's AI answers. This one asks."* An RL environment where an agent learns
+to understand any subject by asking the sharpest questions, watching a field of
+candidates collapse to the truth in as few questions as possible, and beating
+frontier models that just guess.
+
+They are two halves of one thesis: **the right question beats the confident
+answer.** Guessing is where hallucination comes from; both tools replace it with
+questioning.
+
+- **The Asker** asks, to *understand* — it learns, by reward alone, which
+  question removes the most uncertainty.
+- **Descartes** doubts, to *be certain* — it questions every decision, then
+  recursively questions its own answers, until nothing unexamined remains.
+
+Point The Asker at a subject and watch it learn what to ask. Point Descartes at a
+plan and watch it refuse to guess.
+→ **[github.com/pranjalbhatia710/the-asker](https://github.com/pranjalbhatia710/the-asker)**
+
+---
+
 ## Development & tests
 
 ```bash
