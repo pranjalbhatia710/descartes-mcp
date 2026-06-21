@@ -40,10 +40,13 @@ async def _resolve_reasoner(ctx):
 
 @mcp.tool()
 async def doubt(prompt: str, context: str = "", max_passes: int = 20, ctx: Context = None) -> dict:
-    """Doubt every decision in a plan, doubt the doubts, and answer each from
-    real evidence — codebase `context` for code doubts, Exa for world doubts —
-    or flag it for the human. Iterate until the plan produces no new
-    load-bearing doubt (convergence). 20 is a hard ceiling, never a target.
+    """Doubt every decision in a plan, doubt the doubts, answer each from real
+    evidence — codebase `context` for code doubts, Exa for world doubts — and
+    then RECURSE: doubt each answer in turn (the question behind the question),
+    banking every grounded finding into a knowledge base that feeds the next
+    round and the final plan. Iterate until no new load-bearing doubt remains
+    (convergence). 20 passes is a hard ceiling; recursion is bounded by depth
+    and a global doubt budget.
 
     Args:
         prompt: the task / plan to harden.
@@ -52,7 +55,9 @@ async def doubt(prompt: str, context: str = "", max_passes: int = 20, ctx: Conte
         max_passes: convergence ceiling (clamped to 20).
 
     Returns:
-        {passes_used, converged, plan, doubt_log, needs_user, engine, open_doubts}
+        {passes_used, converged, plan, doubt_log (each with depth+parent),
+         doubt_tree (nested), knowledge_base (accumulated grounded facts),
+         needs_user, engine, note, open_doubts, max_depth_reached}
     """
     reasoner = await _resolve_reasoner(ctx)
     return await run_doubt_loop(prompt, context, max_passes, reasoner, exa_ground)

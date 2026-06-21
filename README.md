@@ -18,7 +18,7 @@ room to hide.
 
 ## The loop
 
-On a prompt, Descartes runs iterative Cartesian doubt:
+On a prompt, Descartes runs recursive Cartesian doubt:
 
 1. **Draft** the plan / decisions.
 2. **Doubt** every load-bearing decision (one of 11 doubt operators per doubt).
@@ -27,12 +27,21 @@ On a prompt, Descartes runs iterative Cartesian doubt:
    - code doubts → resolved from the `context` you pass in,
    - world doubts → resolved via **Exa** (cited, confidence-scored),
    - ungroundable → marked **NEEDS_HUMAN**.
-5. **Revise** the plan with what survived.
-6. **Repeat** from step 2.
+5. **Doubt the answer** — recurse: each settled answer is itself doubted (the
+   question behind the question), spawning the next layer of doubts, bounded by
+   depth and a global doubt budget.
+6. **Bank it** — every grounded finding accumulates into a **knowledge base**
+   that feeds the next round of doubting and the final plan.
+7. **Revise** the plan with what survived, and **repeat** from step 2.
+
+The output is therefore a **doubt tree** (each entry carries `depth` + `parent`),
+not a flat list, plus a `knowledge_base` of accumulated facts.
 
 **Stopping rule:** the loop stops the moment a full pass produces **no new
 load-bearing doubt** — that is convergence. It might be pass 3 or pass 9. **20 is
-a hard ceiling, never a target.** It never manufactures doubt to keep going.
+a hard ceiling, never a target**, and recursion is bounded by `DESCARTES_MAX_DEPTH`
+(default 3) and `DESCARTES_DOUBT_BUDGET` (default 64). It never manufactures doubt
+to keep going.
 
 **Grounding rule:** every answer resolves against real evidence or becomes a
 question for you. Low-confidence Exa is never asserted. 20 rounds of
@@ -119,13 +128,25 @@ Runs the loop above. Returns:
   "converged": true,
   "plan": "<the refined, doubt-hardened plan>",
   "doubt_log": [
-    { "pass": 1, "operator": "assumption", "doubt": "...",
+    { "id": 1, "pass": 1, "depth": 0, "parent": null,
+      "operator": "assumption", "doubt": "...", "kind": "code",
       "status": "CONFIRMED|REFUTED|UNKNOWN|NEEDS_HUMAN",
       "resolution": "...", "source": "..." }
   ],
-  "needs_user": [ "<the few decisions only you can make>" ]
+  "doubt_tree": [ { "depth": 0, "children": [ { "depth": 1, "children": [] } ] } ],
+  "knowledge_base": [
+    { "claim": "...", "verdict": "CONFIRMED", "evidence": "...", "source": "...", "depth": 0 }
+  ],
+  "needs_user": [ "<the few decisions only you can make>" ],
+  "engine": "claude-sampling",
+  "note": "<plain-English: how this run was powered>",
+  "max_depth_reached": 2
 }
 ```
+
+`doubt_log` is the flat record (each entry stamped with `depth` + `parent`);
+`doubt_tree` is the same data nested; `knowledge_base` is everything Descartes
+grounded along the way, which it builds on instead of re-deriving.
 
 `needs_user` is the product: it separates *what Descartes resolved itself* from
 *what it genuinely needs you for*. Kept short — the truly blocking ones only.

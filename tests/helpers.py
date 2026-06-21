@@ -2,6 +2,7 @@
 import json
 
 from descartes.loop import (
+    CHILD_SYS,
     DRAFT_SYS,
     GEN_SYS,
     PRUNE_SYS,
@@ -72,6 +73,39 @@ class DepthReasoner(Reasoner):
             return ['{"status": "CONFIRMED", "resolution": "found in evidence", "citation": null}']
         # revise
         return ["# Plan (revised)\n- decision alpha\n- decision beta"]
+
+
+class RecursiveReasoner(Reasoner):
+    """Raises one root doubt, then doubts every answer forever (unique children
+    each time). It never stops on its own, so MAX_DEPTH / NODE_BUDGET are what
+    actually bound the recursion — exactly what the recursion tests check."""
+    kind = "llm"
+    name = "recursive-stub"
+
+    def __init__(self, panel_size=1):
+        self.panel_size = panel_size
+        self.gen = 0
+        self.child = 0
+
+    async def complete(self, system, user, n=1):
+        if system == DRAFT_SYS:
+            return ["# Plan\n- root decision"]
+        if system == GEN_SYS:
+            self.gen += 1
+            if self.gen == 1:
+                return [json.dumps([{"operator": "assumption",
+                                     "doubt": "is the root premise sound?", "kind": "code"}])]
+            return ["[]"]
+        if system == PRUNE_SYS:
+            return [_candidates_from_prune_user(user)]
+        if system in (RESOLVE_CODE_SYS, RESOLVE_WORLD_SYS):
+            return ['{"status": "CONFIRMED", "resolution": "grounded in evidence", "citation": null}']
+        if system == CHILD_SYS:
+            self.child += 1
+            return [json.dumps([{"operator": "second_order",
+                                 "doubt": f"follow-up {self.child}: what does that answer assume?",
+                                 "kind": "code"}])]
+        return ["# Plan\n- root decision"]
 
 
 class PanelStub(Reasoner):

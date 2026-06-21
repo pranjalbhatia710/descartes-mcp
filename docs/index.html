@@ -214,8 +214,8 @@
 
 <section id="loop">
   <div class="wrap">
-    <p class="kicker">the doubt loop</p>
-    <p class="sub">Draft → doubt → doubt the doubts → answer from evidence → revise → repeat. It stops the instant a pass produces no new load-bearing doubt. Twenty passes is a ceiling, never a dare.</p>
+    <p class="kicker">the recursive doubt loop</p>
+    <p class="sub">Draft, doubt, doubt the doubts, answer from evidence, then doubt the answer and recurse. Every grounded finding is banked into a knowledge base that feeds the next round and the final plan. It stops the instant a pass produces no new load-bearing doubt.</p>
     <div class="loop">
       <figure class="loopface" style="margin:0">
         <img class="img-px" id="loop-img" src="assets/descartes-ponder.png" alt="Descartes pondering" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/>
@@ -228,10 +228,12 @@
           <span class="chip" data-cap="I doubt that. And that. And that.">doubt</span>
           <span class="chip" data-cap="Are these the right doubts?">doubt the doubts</span>
           <span class="chip" data-cap="Show me the evidence.">answer</span>
+          <span class="chip" data-cap="And what does THAT answer assume?">doubt the answer ↻</span>
+          <span class="chip" data-cap="Bank what held. Build on it.">knowledge base</span>
           <span class="chip" data-cap="The plan, but wiser.">revise</span>
           <span class="chip" data-cap="Nothing new to fear. Done.">converged</span>
         </div>
-        <p class="loopnote">“An assumption unexamined is not worth shipping.”</p>
+        <p class="loopnote">“The question behind the question is where the work hides.”</p>
       </div>
     </div>
   </div>
@@ -353,12 +355,14 @@ descartes --selftest
   var SCRIPT = [
     ['c-dim','$ descartes.doubt("Cache /report with Redis", context="report.py …")'],
     ['c-quill','  …pausing to doubt everything…'],
-    ['c-grn','✓ pass 1  assumption   — stable cache key?      CONFIRMED  (models.py)'],
-    ['c-grn','✓ pass 1  inversion    — fail open, not closed?  REFUTED    (it was wrong)'],
-    ['c-grn','✓ pass 2  named_source — is SETEX atomic?        CONFIRMED  (redis.io)'],
-    ['c-amb','? pass 3  second_order — eviction policy?        NEEDS_HUMAN (the panel split)'],
+    ['c-grn','✓ d0  assumption   — stable cache key?          CONFIRMED  (models.py)'],
+    ['c-grn','  ↳ d1  …but is the key collision-free?         CONFIRMED  (sha256 of id+ver)'],
+    ['c-grn','✓ d0  named_source — is SETEX atomic?           CONFIRMED  (redis.io)'],
+    ['c-grn','  ↳ d1  …and atomic under the retry client?     CONFIRMED  (redis-py docs)'],
+    ['c-dim','  kb ← 4 facts banked · reused, not re-derived'],
+    ['c-amb','? d0  second_order — eviction policy?           NEEDS_HUMAN (the panel split)'],
     ['c-quill','  I have doubted all I can. The rest is yours.'],
-    ['c-grn','▸ converged in 4 passes  ·  ceiling was 20, never the target'],
+    ['c-grn','▸ converged · ceiling was 20, never the target'],
     ['c-red','needs_user → "Which eviction policy fits your budget?"']
   ];
   var con = document.getElementById('console'), s = 0;

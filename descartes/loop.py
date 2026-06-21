@@ -28,8 +28,21 @@ def _env_float(name, default):
         return float(default)
 
 
+def _env_int(name, default, minimum=0):
+    try:
+        return max(minimum, int(os.environ.get(name, default)))
+    except (TypeError, ValueError):
+        return int(default)
+
+
 EXA_CONFIDENCE_FLOOR = _env_float("DESCARTES_EXA_FLOOR", 0.45)
 HARD_CEILING = 20
+
+# Recursion: every settled answer is itself doubted (the question behind the
+# question). MAX_DEPTH bounds how deep that recursion goes; NODE_BUDGET is the
+# global safety cap on total doubts so it can never explode.
+MAX_DEPTH = _env_int("DESCARTES_MAX_DEPTH", 3, minimum=0)
+NODE_BUDGET = _env_int("DESCARTES_DOUBT_BUDGET", 64, minimum=1)
 
 # One honest line per engine so the caller always knows how the run was powered
 # (and, on the no-key floor, that the doubts were handed back rather than guessed).
@@ -159,6 +172,24 @@ REVISE_SYS = (
     "Keep it concrete and minimal. Output ONLY the full revised plan in markdown."
 )
 
+CHILD_SYS = (
+    "You just answered a doubt. Now DOUBT THE ANSWER — the question behind the question. "
+    "Given the doubt, its resolution, and the established knowledge, raise any NEW "
+    "load-bearing follow-up doubt that this answer itself creates, assumes, or leaves open. "
+    "If the answer is solid and raises nothing new, return []. Never repeat an "
+    "already-resolved doubt. Same JSON schema: "
+    '[{"operator": <id>, "doubt": <one sharp question>, "kind": "code"|"world"|"user"}].'
+)
+
+
+def _render_kb(kb, limit=16):
+    """Compact view of the accumulated knowledge base, fed back into prompts."""
+    if not kb:
+        return "ESTABLISHED KNOWLEDGE: (none yet)"
+    rows = kb[-limit:]
+    lines = "\n".join(f"- [{e['verdict']}] {e['claim']} -> {_clip(e['evidence'], 120)}" for e in rows)
+    return "ESTABLISHED KNOWLEDGE (already grounded — build on it, do not re-derive):\n" + lines
+
 
 # --------------------------------------------------------------------------- #
 # steps — each branches once for the deterministic template path
@@ -177,17 +208,8 @@ async def draft_plan(reasoner, prompt, context):
     return _template_plan(prompt, context)
 
 
-async def generate_doubts(reasoner, plan, prompt, context, seen_texts):
-    if reasoner.kind == "template":
-        return _template_doubts(plan, context, seen_texts)
-    already = "\n".join(f"- {t}" for t in list(seen_texts)[-40:]) or "(none yet)"
-    user = (
-        f"TASK:\n{prompt}\n\nCURRENT PLAN:\n{plan}\n\n"
-        f"CODEBASE CONTEXT AVAILABLE:\n{_clip(context, 4000) or '(none)'}\n\n"
-        f"DOUBTS ALREADY RAISED/RESOLVED:\n{already}\n\n"
-        "List the new load-bearing doubts now (or [] if none remain)."
-    )
-    outs = await reasoner.complete(GEN_SYS, user, n=reasoner.panel_size)
+def _parse_doubts(outs):
+    """Parse + clean + dedup doubts from one or more model completions."""
     collected = []
     for text in outs:
         parsed = extract_json(text)
@@ -196,11 +218,42 @@ async def generate_doubts(reasoner, plan, prompt, context, seen_texts):
                 d = _clean_doubt(raw)
                 if d:
                     collected.append(d)
-    # union across panel members, dedup by normalized text
     uniq = {}
     for d in collected:
         uniq.setdefault(_norm(d["doubt"]), d)
     return list(uniq.values())
+
+
+async def generate_doubts(reasoner, plan, prompt, context, seen_texts, kb=None):
+    if reasoner.kind == "template":
+        return _template_doubts(plan, context, seen_texts)
+    already = "\n".join(f"- {t}" for t in list(seen_texts)[-40:]) or "(none yet)"
+    user = (
+        f"TASK:\n{prompt}\n\nCURRENT PLAN:\n{plan}\n\n"
+        f"CODEBASE CONTEXT AVAILABLE:\n{_clip(context, 4000) or '(none)'}\n\n"
+        f"{_render_kb(kb or [])}\n\n"
+        f"DOUBTS ALREADY RAISED/RESOLVED:\n{already}\n\n"
+        "List the new load-bearing doubts now (or [] if none remain)."
+    )
+    outs = await reasoner.complete(GEN_SYS, user, n=reasoner.panel_size)
+    return _parse_doubts(outs)
+
+
+async def question_the_answer(reasoner, doubt, resolution, context, kb, seen_texts):
+    """Recursion: doubt the ANSWER, yielding the next layer of load-bearing doubts."""
+    if reasoner.kind == "template":
+        return []  # the no-model floor asks rather than recurses
+    already = "\n".join(f"- {t}" for t in list(seen_texts)[-40:]) or "(none yet)"
+    user = (
+        f"ORIGINAL DOUBT:\n{doubt['doubt']}\n\n"
+        f"YOUR ANSWER:\n{resolution['status']} — {resolution['resolution']} "
+        f"(source: {resolution['source']})\n\n"
+        f"{_render_kb(kb or [])}\n\n"
+        f"ALREADY RAISED/RESOLVED:\n{already}\n\n"
+        "What new load-bearing doubt does this answer itself raise? (or [] if none)."
+    )
+    outs = await reasoner.complete(CHILD_SYS, user, n=1)
+    return _parse_doubts(outs)
 
 
 async def prune_doubts(reasoner, doubts, plan):
@@ -224,16 +277,16 @@ async def prune_doubts(reasoner, doubts, plan):
     return survivors  # may be empty -> a legitimate "all trivial" verdict
 
 
-async def resolve_doubt(reasoner, ground_fn, doubt, context):
+async def resolve_doubt(reasoner, ground_fn, doubt, context, kb=None):
     kind = doubt.get("kind", "code")
     if kind == "user":
         return _res("NEEDS_HUMAN", "Only the user can decide this (preference/scope/priority).", "user")
     if kind == "world":
-        return await _resolve_world(reasoner, ground_fn, doubt)
-    return await _resolve_code(reasoner, doubt, context)
+        return await _resolve_world(reasoner, ground_fn, doubt, kb)
+    return await _resolve_code(reasoner, doubt, context, kb)
 
 
-async def _resolve_world(reasoner, ground_fn, doubt):
+async def _resolve_world(reasoner, ground_fn, doubt, kb=None):
     facts = await ground_fn(doubt["doubt"])
     conf = float(facts.get("confidence", 0.0) or 0.0)
     if not facts.get("facts") or conf < EXA_CONFIDENCE_FLOOR:
@@ -242,12 +295,13 @@ async def _resolve_world(reasoner, ground_fn, doubt):
         top = facts["facts"][0]
         return _res("CONFIRMED", _clip(top.get("claim"), 200), top.get("url"))
     facts_blob = json.dumps(facts["facts"][:5], indent=2)
-    user = f"DOUBT:\n{doubt['doubt']}\n\nCITED FACTS (confidence={conf}):\n{facts_blob}\n\nResolve now."
+    user = (f"DOUBT:\n{doubt['doubt']}\n\n{_render_kb(kb or [])}\n\n"
+            f"CITED FACTS (confidence={conf}):\n{facts_blob}\n\nResolve now.")
     outs = await reasoner.complete(RESOLVE_WORLD_SYS, user, n=reasoner.panel_size)
     return _vote(outs, default_source=facts["facts"][0].get("url"))
 
 
-async def _resolve_code(reasoner, doubt, context):
+async def _resolve_code(reasoner, doubt, context, kb=None):
     if not (context or "").strip():
         return _res("NEEDS_HUMAN", "No codebase evidence was provided to resolve this.", "user")
     if reasoner.kind == "template":
@@ -260,7 +314,8 @@ async def _resolve_code(reasoner, doubt, context):
             "ask-user",
         )
     user = (
-        f"DOUBT:\n{doubt['doubt']}\n\nCODEBASE EVIDENCE:\n{_clip(context, 6000)}\n\n"
+        f"DOUBT:\n{doubt['doubt']}\n\n{_render_kb(kb or [])}\n\n"
+        f"CODEBASE EVIDENCE:\n{_clip(context, 6000)}\n\n"
         "Resolve using only this evidence."
     )
     outs = await reasoner.complete(RESOLVE_CODE_SYS, user, n=reasoner.panel_size)
@@ -289,7 +344,7 @@ def _vote(outputs, default_source=None):
                 "panel-disagreement")
 
 
-async def revise_plan(reasoner, plan, resolutions):
+async def revise_plan(reasoner, plan, resolutions, kb=None):
     if reasoner.kind == "template":
         return plan  # deterministic & stable so the loop converges cleanly
     settled = [r for r in resolutions if r["status"] in ("CONFIRMED", "REFUTED")]
@@ -299,13 +354,25 @@ async def revise_plan(reasoner, plan, resolutions):
         [{"doubt": r["doubt"], "status": r["status"], "resolution": r["resolution"]} for r in resolutions],
         indent=2,
     )
-    user = f"CURRENT PLAN:\n{plan}\n\nRESOLVED DOUBTS:\n{blob}\n\nProduce the revised plan."
+    user = (f"CURRENT PLAN:\n{plan}\n\n{_render_kb(kb or [])}\n\n"
+            f"RESOLVED DOUBTS THIS PASS:\n{blob}\n\nProduce the revised plan.")
     out = await reasoner.complete(REVISE_SYS, user, n=1)
     return out[0].strip() if out and out[0].strip() else plan
 
 
+def _build_tree(log):
+    """Turn the flat, id/parent-stamped doubt log into a nested tree."""
+    by_id = {e["id"]: {**e, "children": []} for e in log}
+    roots = []
+    for e in log:
+        node = by_id[e["id"]]
+        parent = by_id.get(e["parent"]) if e.get("parent") else None
+        (parent["children"] if parent else roots).append(node)
+    return roots
+
+
 # --------------------------------------------------------------------------- #
-# the loop
+# the loop — recursive doubt + an accumulating knowledge base
 # --------------------------------------------------------------------------- #
 async def run_doubt_loop(prompt, context, max_passes, reasoner, ground_fn) -> dict:
     context = context or ""
@@ -313,14 +380,54 @@ async def run_doubt_loop(prompt, context, max_passes, reasoner, ground_fn) -> di
     plan = await draft_plan(reasoner, prompt, context)
 
     doubt_log: list[dict] = []
+    knowledge: list[dict] = []      # accumulated, grounded facts (the knowledge base)
     needs_user: list[str] = []
     seen: set[str] = set()
+    state = {"id": 0, "nodes": 0}
+    budget_hit = False
     converged = False
     passes_used = 0
 
+    async def visit(doubt, pass_no, depth, parent_id):
+        """Resolve one doubt, record it, grow the KB, then doubt the answer."""
+        nonlocal budget_hit
+        if state["nodes"] >= NODE_BUDGET:
+            budget_hit = True
+            return
+        state["nodes"] += 1
+        state["id"] += 1
+        node_id = state["id"]
+
+        r = await resolve_doubt(reasoner, ground_fn, doubt, context, knowledge)
+        doubt_log.append({
+            "id": node_id, "pass": pass_no, "depth": depth, "parent": parent_id,
+            "operator": doubt.get("operator", "assumption"),
+            "doubt": doubt["doubt"], "kind": doubt.get("kind", "code"),
+            "status": r["status"], "resolution": r["resolution"], "source": r["source"],
+        })
+        if r["status"] == "NEEDS_HUMAN":
+            needs_user.append(doubt["doubt"])
+        if r["status"] in ("CONFIRMED", "REFUTED"):
+            knowledge.append({
+                "claim": doubt["doubt"], "verdict": r["status"],
+                "evidence": r["resolution"], "source": r["source"], "depth": depth,
+            })
+
+        # Recurse: a settled answer is itself doubted (the question behind it).
+        if depth < MAX_DEPTH and r["status"] in ("CONFIRMED", "REFUTED"):
+            if state["nodes"] >= NODE_BUDGET:
+                budget_hit = True  # wanted to go deeper, but the budget says stop
+            else:
+                children = await question_the_answer(reasoner, doubt, r, context, knowledge, seen)
+                fresh = [c for c in children if _norm(c["doubt"]) not in seen]
+                for c in fresh:
+                    seen.add(_norm(c["doubt"]))
+                for c in fresh:
+                    await visit(c, pass_no, depth + 1, node_id)
+
     for p in range(1, cap + 1):
         passes_used = p
-        candidates = await generate_doubts(reasoner, plan, prompt, context, seen)
+        candidates = await generate_doubts(reasoner, plan, prompt, context, seen, knowledge)
         survivors = await prune_doubts(reasoner, candidates, plan)
         new = [d for d in survivors if _norm(d["doubt"]) not in seen]
 
@@ -330,24 +437,14 @@ async def run_doubt_loop(prompt, context, max_passes, reasoner, ground_fn) -> di
 
         for d in new:
             seen.add(_norm(d["doubt"]))
-
-        resolutions = []
         for d in new:
-            r = await resolve_doubt(reasoner, ground_fn, d, context)
-            entry = {
-                "pass": p,
-                "operator": d.get("operator", "assumption"),
-                "doubt": d["doubt"],
-                "status": r["status"],
-                "resolution": r["resolution"],
-                "source": r["source"],
-            }
-            doubt_log.append(entry)
-            resolutions.append(entry)
-            if r["status"] == "NEEDS_HUMAN":
-                needs_user.append(d["doubt"])
+            await visit(d, p, 0, None)
 
-        plan = await revise_plan(reasoner, plan, resolutions)
+        this_pass = [e for e in doubt_log if e["pass"] == p]
+        plan = await revise_plan(reasoner, plan, this_pass, knowledge)
+
+        if budget_hit:
+            break  # global doubt budget exhausted — stop rather than spiral
 
     # dedup needs_user, preserve order
     seen_nu, nu = set(), []
@@ -358,16 +455,23 @@ async def run_doubt_loop(prompt, context, max_passes, reasoner, ground_fn) -> di
             nu.append(q)
 
     open_doubts = sum(1 for e in doubt_log if e["status"] in OPEN_STATUSES)
+    note = ENGINE_NOTES.get(reasoner.name, "")
+    if budget_hit:
+        note = (note + "  (Stopped at the doubt budget of "
+                f"{NODE_BUDGET}; raise DESCARTES_DOUBT_BUDGET to go deeper.)").strip()
     return {
         "passes_used": passes_used,
         "converged": converged,
         "plan": plan,
         "doubt_log": doubt_log,
+        "knowledge_base": knowledge,
+        "doubt_tree": _build_tree(doubt_log),
         "needs_user": nu,
         # transparency extras (not required by the contract, useful to callers):
         "engine": reasoner.name,
-        "note": ENGINE_NOTES.get(reasoner.name, ""),
+        "note": note,
         "open_doubts": open_doubts,
+        "max_depth_reached": max((e["depth"] for e in doubt_log), default=0),
     }
 
 
