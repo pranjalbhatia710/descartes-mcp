@@ -95,7 +95,21 @@ cp .env.example .env        # .env is gitignored; never commit it
 
 # 3. run it (stdio MCP server)
 descartes                   # or: descartes --selftest   to prove the loop converges
+descartes --demo            # watch it doubt, live, in your terminal
 ```
+
+### Watch it work
+
+`descartes --demo` runs a scripted doubt session and renders it live — a spinner
+while it thinks, a self-drawing **doubt tree** (`◆` top-level, `↳` recursion),
+colour-coded statuses (✓ confirmed · ✗ refuted · ⚑ for you), the knowledge base
+filling, and a `CONVERGED` banner.
+
+Inside Claude Code, the real `doubt()` tool reports the *same* events to the
+client as **MCP progress + log notifications**, so you see it working as it runs.
+It never prints to stdout — that channel is the MCP protocol. Set
+`DESCARTES_VERBOSE=1` to also stream compact progress to the server's **stderr**
+log.
 
 ### Add to Claude Code
 

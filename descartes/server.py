@@ -38,6 +38,54 @@ async def _resolve_reasoner(ctx):
     return reasoner
 
 
+def _stderr_event(evt):
+    """Compact, human-readable progress to STDERR only — never stdout (that is
+    the MCP protocol channel). Shows up in the client's MCP server log."""
+    import sys
+    t = evt.get("type")
+    line = None
+    if t == "start":
+        line = f"[descartes] doubting: {evt['prompt']}"
+    elif t == "pass":
+        line = f"[descartes] pass {evt['pass']}/{evt['cap']}"
+    elif t == "doubt":
+        line = f"[descartes] {'  ' * evt['depth']}[{evt['status']}] {evt['doubt'][:90]}"
+    elif t == "done":
+        line = (f"[descartes] done: converged={evt['converged']} passes={evt['passes']} "
+                f"grounded={evt['grounded']} needs_user={evt['needs_user']}")
+    if line:
+        print(line, file=sys.stderr, flush=True)
+
+
+def _make_on_event(ctx):
+    """Surface live progress while doubt() runs: MCP progress + log notifications
+    to the client (so the tool visibly works in Claude Code), and optional
+    stderr lines when DESCARTES_VERBOSE is set. Returns None when nothing to do."""
+    verbose = bool(os.environ.get("DESCARTES_VERBOSE"))
+    if ctx is None and not verbose:
+        return None
+
+    async def on_event(evt):
+        t = evt.get("type")
+        if ctx is not None:
+            try:
+                if t == "pass":
+                    await ctx.report_progress(evt["pass"], evt["cap"], f"doubt pass {evt['pass']}/{evt['cap']}")
+                elif t == "draft":
+                    await ctx.info("Drafted the plan; now doubting every decision…")
+                elif t == "doubt":
+                    await ctx.info(f"{'  ' * evt['depth']}d{evt['depth']} [{evt['status']}] {evt['doubt']}")
+                elif t == "done":
+                    await ctx.info(f"Converged={evt['converged']} in {evt['passes']} pass(es); "
+                                   f"{evt['grounded']} grounded, {evt['needs_user']} for you.")
+            except Exception:  # noqa: BLE001 — client may not support these; never break the run
+                pass
+        if verbose:
+            _stderr_event(evt)
+
+    return on_event
+
+
 @mcp.tool()
 async def doubt(prompt: str, context: str = "", max_passes: int = 20, ctx: Context = None) -> dict:
     """Doubt every decision in a plan, doubt the doubts, answer each from real
@@ -60,7 +108,8 @@ async def doubt(prompt: str, context: str = "", max_passes: int = 20, ctx: Conte
          needs_user, engine, note, open_doubts, max_depth_reached}
     """
     reasoner = await _resolve_reasoner(ctx)
-    return await run_doubt_loop(prompt, context, max_passes, reasoner, exa_ground)
+    on_event = _make_on_event(ctx)
+    return await run_doubt_loop(prompt, context, max_passes, reasoner, exa_ground, on_event=on_event)
 
 
 @mcp.tool()
@@ -154,6 +203,10 @@ def _selftest():
 
 def main():
     import sys
+    if "--demo" in sys.argv:
+        from .render import run_demo
+        run_demo()
+        return
     if "--selftest" in sys.argv:
         _selftest()
         return

@@ -102,6 +102,16 @@ def _res(status, resolution, source):
     return {"status": status, "resolution": resolution, "source": source}
 
 
+async def _emit(on_event, event):
+    """Fire a progress event to an optional async observer. A renderer or log
+    hiccup must never break the loop, so failures are swallowed."""
+    if on_event is not None:
+        try:
+            await on_event(event)
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def _clean_doubt(d):
     if not isinstance(d, dict):
         return None
@@ -374,10 +384,12 @@ def _build_tree(log):
 # --------------------------------------------------------------------------- #
 # the loop — recursive doubt + an accumulating knowledge base
 # --------------------------------------------------------------------------- #
-async def run_doubt_loop(prompt, context, max_passes, reasoner, ground_fn) -> dict:
+async def run_doubt_loop(prompt, context, max_passes, reasoner, ground_fn, on_event=None) -> dict:
     context = context or ""
     cap = max(1, min(int(max_passes or HARD_CEILING), HARD_CEILING))  # hard ceiling 20
+    await _emit(on_event, {"type": "start", "prompt": prompt, "engine": reasoner.name, "cap": cap})
     plan = await draft_plan(reasoner, prompt, context)
+    await _emit(on_event, {"type": "draft", "plan": plan})
 
     doubt_log: list[dict] = []
     knowledge: list[dict] = []      # accumulated, grounded facts (the knowledge base)
@@ -398,13 +410,20 @@ async def run_doubt_loop(prompt, context, max_passes, reasoner, ground_fn) -> di
         state["id"] += 1
         node_id = state["id"]
 
+        operator = doubt.get("operator", "assumption")
+        await _emit(on_event, {"type": "thinking", "depth": depth,
+                               "operator": operator, "doubt": doubt["doubt"]})
         r = await resolve_doubt(reasoner, ground_fn, doubt, context, knowledge)
         doubt_log.append({
             "id": node_id, "pass": pass_no, "depth": depth, "parent": parent_id,
-            "operator": doubt.get("operator", "assumption"),
+            "operator": operator,
             "doubt": doubt["doubt"], "kind": doubt.get("kind", "code"),
             "status": r["status"], "resolution": r["resolution"], "source": r["source"],
         })
+        await _emit(on_event, {"type": "doubt", "id": node_id, "pass": pass_no, "depth": depth,
+                               "operator": operator, "doubt": doubt["doubt"],
+                               "kind": doubt.get("kind", "code"), "status": r["status"],
+                               "resolution": r["resolution"], "kb_size": len(knowledge)})
         if r["status"] == "NEEDS_HUMAN":
             needs_user.append(doubt["doubt"])
         if r["status"] in ("CONFIRMED", "REFUTED"):
@@ -427,6 +446,7 @@ async def run_doubt_loop(prompt, context, max_passes, reasoner, ground_fn) -> di
 
     for p in range(1, cap + 1):
         passes_used = p
+        await _emit(on_event, {"type": "pass", "pass": p, "cap": cap})
         candidates = await generate_doubts(reasoner, plan, prompt, context, seen, knowledge)
         survivors = await prune_doubts(reasoner, candidates, plan)
         new = [d for d in survivors if _norm(d["doubt"]) not in seen]
@@ -455,10 +475,15 @@ async def run_doubt_loop(prompt, context, max_passes, reasoner, ground_fn) -> di
             nu.append(q)
 
     open_doubts = sum(1 for e in doubt_log if e["status"] in OPEN_STATUSES)
+    grounded = sum(1 for e in doubt_log if e["status"] in ("CONFIRMED", "REFUTED"))
+    max_depth = max((e["depth"] for e in doubt_log), default=0)
     note = ENGINE_NOTES.get(reasoner.name, "")
     if budget_hit:
         note = (note + "  (Stopped at the doubt budget of "
                 f"{NODE_BUDGET}; raise DESCARTES_DOUBT_BUDGET to go deeper.)").strip()
+    await _emit(on_event, {"type": "done", "converged": converged, "passes": passes_used,
+                           "doubts": len(doubt_log), "grounded": grounded,
+                           "needs_user": len(nu), "max_depth": max_depth, "budget_hit": budget_hit})
     return {
         "passes_used": passes_used,
         "converged": converged,
@@ -471,7 +496,7 @@ async def run_doubt_loop(prompt, context, max_passes, reasoner, ground_fn) -> di
         "engine": reasoner.name,
         "note": note,
         "open_doubts": open_doubts,
-        "max_depth_reached": max((e["depth"] for e in doubt_log), default=0),
+        "max_depth_reached": max_depth,
     }
 
 

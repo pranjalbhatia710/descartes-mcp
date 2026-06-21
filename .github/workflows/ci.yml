@@ -36,6 +36,7 @@ jobs:
         run: |
           descartes --version
           descartes --selftest
+          descartes --demo
 
       - name: Convergence benchmark (asserts invariants)
         run: python -m benchmark.bench
