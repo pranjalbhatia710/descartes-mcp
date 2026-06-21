@@ -1,6 +1,8 @@
 """Server surface: tool registration, verdict gating, reasoner resolution, e2e doubt()."""
 import asyncio
 
+from helpers import claude_sampling_ctx
+
 from descartes.panel import ClaudeSamplingReasoner, OpenRouterReasoner, TemplateReasoner
 from descartes.server import (
     _resolve_reasoner,
@@ -106,6 +108,30 @@ def test_doubt_tool_end_to_end_template():
     assert set(["passes_used", "converged", "plan", "doubt_log", "needs_user"]).issubset(res)
     assert res["converged"] is True
     assert res["passes_used"] < 20
+
+
+def test_works_with_just_claude_and_no_api_keys():
+    # A client that supports MCP sampling runs the whole loop on Claude alone —
+    # no Fireworks, no Exa, no OpenRouter.
+    res = run(doubt("Design the cache layer.",
+                    context="report.py builds ReportModel; redis not a dependency yet.",
+                    ctx=claude_sampling_ctx()))
+    assert res["engine"] == "claude-sampling"
+    assert res["converged"] is True
+    assert any(e["status"] == "CONFIRMED" for e in res["doubt_log"])  # Claude resolved it from context
+    assert "Claude" in res["note"]
+
+
+def test_no_keys_no_sampling_asks_the_user_instead_of_guessing():
+    # No keys and no sampling: it must surface the doubts as questions, never
+    # fake-confirm anything from keyword matching.
+    res = run(doubt("Design the cache layer.",
+                    context="report.py builds ReportModel.", ctx=None))
+    assert res["engine"] == "template-fallback"
+    assert res["needs_user"]                                   # it asks the human
+    assert "CONFIRMED" not in {e["status"] for e in res["doubt_log"]}  # never guesses
+    assert all(e["status"] in ("NEEDS_HUMAN", "UNKNOWN") for e in res["doubt_log"])
+    assert "did not guess" in res["note"]
 
 
 def test_ground_tool_degrades_without_key():

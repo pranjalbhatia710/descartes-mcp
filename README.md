@@ -52,6 +52,20 @@ so that is forbidden by construction.
 
 `EXA_API_KEY` is independent: set it to ground world doubts in any mode.
 
+### No keys? It still works — with just Claude
+
+You do **not** need any API keys. Inside an MCP client that supports sampling
+(Claude Code), the whole loop runs on **the client's own Claude model** — code
+doubts are resolved by reading the `context` you pass in, and anything that
+needs an external fact or a human decision is handed back to you.
+
+And if even sampling isn't available, Descartes **does not guess**. It will not
+fake-confirm a doubt from keyword matching; it surfaces every load-bearing doubt
+as a question in `needs_user` and tells you so. Every `doubt()` result carries an
+`engine` and a plain-English `note` describing exactly how it was powered, so a
+degraded run is never silent. The one rule it never breaks: *no answer without
+evidence — otherwise, ask you.*
+
 ---
 
 ## 3-step setup

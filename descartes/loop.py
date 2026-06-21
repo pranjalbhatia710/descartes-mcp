@@ -31,6 +31,21 @@ def _env_float(name, default):
 EXA_CONFIDENCE_FLOOR = _env_float("DESCARTES_EXA_FLOOR", 0.45)
 HARD_CEILING = 20
 
+# One honest line per engine so the caller always knows how the run was powered
+# (and, on the no-key floor, that the doubts were handed back rather than guessed).
+ENGINE_NOTES = {
+    "fireworks-panel": "Doubted across a panel of Fireworks model families; where they "
+                       "disagreed, the doubt was escalated to you.",
+    "claude-sampling": "Doubted with your own Claude model via MCP sampling — no external "
+                       "API keys required.",
+    "openrouter": "Doubted with a single model via OpenRouter.",
+    "template-fallback": "No API keys and no MCP sampling were available, so I did not guess: "
+                         "I surfaced the load-bearing doubts as questions for you to answer. "
+                         "For automatic doubting, run inside an MCP client that supports "
+                         "sampling (Claude alone, no keys), or set FIREWORKS_API_KEY / "
+                         "OPENROUTER_API_KEY.",
+}
+
 _STOP = {"this", "that", "with", "from", "what", "which", "does", "will", "have",
          "here", "there", "would", "could", "should", "about", "into", "than",
          "then", "they", "them", "your", "plan", "step", "doubt"}
@@ -236,9 +251,14 @@ async def _resolve_code(reasoner, doubt, context):
     if not (context or "").strip():
         return _res("NEEDS_HUMAN", "No codebase evidence was provided to resolve this.", "user")
     if reasoner.kind == "template":
-        if _keyword_hit(doubt["doubt"], context):
-            return _res("CONFIRMED", "The provided context addresses this decision.", "codebase-context")
-        return _res("NEEDS_HUMAN", "Not found in the provided context; needs a human or more context.", "user")
+        # No model is available to actually read the evidence, so we must NOT
+        # assert. Keyword overlap is only a hint; the honest move is to ask.
+        relevant = " The provided context looks relevant." if _keyword_hit(doubt["doubt"], context) else ""
+        return _res(
+            "NEEDS_HUMAN",
+            f"No model available to read the evidence, so I won't guess — please confirm.{relevant}",
+            "ask-user",
+        )
     user = (
         f"DOUBT:\n{doubt['doubt']}\n\nCODEBASE EVIDENCE:\n{_clip(context, 6000)}\n\n"
         "Resolve using only this evidence."
@@ -346,6 +366,7 @@ async def run_doubt_loop(prompt, context, max_passes, reasoner, ground_fn) -> di
         "needs_user": nu,
         # transparency extras (not required by the contract, useful to callers):
         "engine": reasoner.name,
+        "note": ENGINE_NOTES.get(reasoner.name, ""),
         "open_doubts": open_doubts,
     }
 

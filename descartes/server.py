@@ -142,6 +142,7 @@ def _selftest():
     print(json.dumps(summary, indent=2))
     print(f"[selftest] converged={res['converged']} in {res['passes_used']} pass(es) "
           f"(hard ceiling 20) via engine={res['engine']}")
+    print(f"  note: {res['note']}")
     print(verdict(res))
     print(f'\n  ✒  "{_an_epigraph()}"')
 

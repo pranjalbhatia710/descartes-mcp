@@ -7,6 +7,7 @@ from descartes.loop import (
     PRUNE_SYS,
     RESOLVE_CODE_SYS,
     RESOLVE_WORLD_SYS,
+    REVISE_SYS,
 )
 from descartes.panel import Reasoner
 
@@ -161,3 +162,48 @@ def install_fake_httpx(monkeypatch, handler):
     FakeAsyncClient.calls = []
     monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
     return FakeAsyncClient
+
+
+# ---- fake MCP-sampling client: "just Claude", no API keys --------------------
+def claude_sampling_ctx():
+    """A fake MCP client whose sampling behaves like a competent Claude: it
+    drafts, raises one code doubt, prunes verbatim, and resolves from the
+    provided context. Lets tests exercise the zero-key 'Claude alone' path."""
+    state = {"gen": 0}
+
+    def respond(system, messages):
+        if system == DRAFT_SYS:
+            return "# Plan\n- decision alpha\n- decision beta"
+        if system == GEN_SYS:
+            state["gen"] += 1
+            if state["gen"] == 1:
+                return json.dumps([{"operator": "assumption",
+                                    "doubt": "is the cache key stable?", "kind": "code"}])
+            return "[]"
+        if system == PRUNE_SYS:
+            user = messages[0].content.text if messages else ""
+            after = user.split("CANDIDATE DOUBTS:\n", 1)
+            return after[1].split("\n\nReturn", 1)[0] if len(after) > 1 else "[]"
+        if system in (RESOLVE_CODE_SYS, RESOLVE_WORLD_SYS):
+            return '{"status": "CONFIRMED", "resolution": "the evidence shows it", "citation": null}'
+        if system == REVISE_SYS:
+            return "# Plan (revised)\n- decision alpha\n- decision beta"
+        return "ok"  # probe + anything else
+
+    class _Content:
+        def __init__(self, text):
+            self.text = text
+
+    class _Result:
+        def __init__(self, text):
+            self.content = _Content(text)
+
+    class _Session:
+        async def create_message(self, **kw):
+            return _Result(respond(kw.get("system_prompt", ""), kw.get("messages") or []))
+
+    class _Ctx:
+        def __init__(self):
+            self.session = _Session()
+
+    return _Ctx()
