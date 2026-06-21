@@ -4,6 +4,12 @@
 
 [![CI](https://github.com/pranjalbhatia710/descartes-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/pranjalbhatia710/descartes-mcp/actions/workflows/ci.yml)
 
+> ### 🔭 Sibling project: **[The Asker](https://github.com/pranjalbhatia710/the-asker)** — *today's AI answers, this one asks.*
+> The Asker learns to **ask** the sharpest questions to understand a subject;
+> Descartes learns to **doubt** until what remains is certain. Two halves of one
+> idea: the right question beats the confident answer.
+> → **https://github.com/pranjalbhatia710/the-asker**
+
 🪶 **[Landing page →](https://pranjalbhatia710.github.io/descartes-mcp/)** &nbsp;·&nbsp; `descartes --epigraph` for a passing thought from the man himself.
 
 An MCP server that, on a prompt, **doubts every decision in a plan, doubts its own
