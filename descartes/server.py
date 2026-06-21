@@ -88,6 +88,37 @@ def compute_verdict(result: dict) -> dict:
     return {"proceed": converged and not blocking, "blocking_questions": blocking}
 
 
+# A little whimsy for the human-facing CLI paths only. NEVER printed on the
+# stdio-server path (that channel is the MCP protocol and must stay clean).
+_EPIGRAPHS = (
+    "I think, therefore I doubt.",
+    "Give me evidence, or give me NEEDS_HUMAN.",
+    "I doubted this very sentence. It survived.",
+    "The only thing I take on faith is your API key.",
+    "Twenty passes is a ceiling, never a dare.",
+    "An assumption unexamined is not worth shipping.",
+    "Dubito, ergo cogito, ergo commit.",
+)
+
+
+def _banner():
+    width = 45
+    rule = "  +" + "-" * width + "+"
+    lines = ("D E S C A R T E S", "doubt, until what remains is certain.")
+    body = "\n".join("  |" + line.center(width) + "|" for line in lines)
+    return f"{rule}\n{body}\n{rule}"
+
+
+def _an_epigraph():
+    import random
+    return random.choice(_EPIGRAPHS)
+
+
+def _print_epigraph():
+    print(_banner())
+    print(f'\n  ✒  "{_an_epigraph()}"\n')
+
+
 def _selftest():
     """Prove the loop converges early and never spirals — no keys needed."""
     import asyncio
@@ -95,6 +126,9 @@ def _selftest():
 
     async def _stub_ground(query):
         return {"query": query, "confidence": 0.0, "facts": [], "status": "UNKNOWN"}
+
+    print(_banner())
+    print("\n  Descartes dips the quill and resolves to doubt everything...\n")
 
     res = asyncio.run(run_doubt_loop(
         prompt="Add a rate limiter to the public API.",
@@ -109,12 +143,16 @@ def _selftest():
     print(f"[selftest] converged={res['converged']} in {res['passes_used']} pass(es) "
           f"(hard ceiling 20) via engine={res['engine']}")
     print(verdict(res))
+    print(f'\n  ✒  "{_an_epigraph()}"')
 
 
 def main():
     import sys
     if "--selftest" in sys.argv:
         _selftest()
+        return
+    if "--epigraph" in sys.argv or "--about" in sys.argv:
+        _print_epigraph()
         return
     if "--version" in sys.argv:
         from . import __version__

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Descartes — doubt, until what remains is certain</title>
+<meta name="description" content="An MCP server that doubts every decision in a plan until it converges, grounded in real evidence. Doubt, until what remains is certain." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IM+Fell+English:ital@0;1&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --parchment:#efe7d4; --parchment-2:#e6dcc3; --parchment-3:#f6f0e1;
+    --ink:#241d15; --ink-soft:#5a4d3c; --rule:rgba(40,28,16,.14);
+    --brown:#6b4a2b; --brown-deep:#3f2a18; --gold:#b07d22; --gold-soft:#d9a93f;
+    --crt-bg:#1c211a; --crt-screen:#ecead2; --crt-green:#7fae5b;
+    --pixel:'Press Start 2P', ui-monospace, monospace;
+    --serif:'IM Fell English', Georgia, 'Times New Roman', serif;
+    --mono:'JetBrains Mono', ui-monospace, monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:
+      repeating-linear-gradient(0deg, transparent 0 31px, var(--rule) 31px 32px),
+      var(--parchment);
+    color:var(--ink); font-family:var(--serif); font-size:19px; line-height:1.6;
+  }
+  a{color:var(--brown-deep); text-underline-offset:3px; text-decoration-thickness:1px}
+  .wrap{max-width:1060px; margin:0 auto; padding:0 24px}
+  .pixel{font-family:var(--pixel); line-height:1.5; letter-spacing:.5px}
+  .mono{font-family:var(--mono)}
+  .img-px{image-rendering:pixelated; image-rendering:crisp-edges}
+
+  /* top bar */
+  header.bar{position:sticky; top:0; z-index:30; background:rgba(239,231,212,.92);
+    backdrop-filter:blur(3px); border-bottom:2px solid var(--ink);}
+  .bar .wrap{display:flex; align-items:center; gap:14px; height:64px}
+  .mark{font-family:var(--pixel); font-size:14px; color:var(--ink)}
+  .mark b{color:var(--brown)}
+  .bar nav{margin-left:auto; display:flex; gap:18px; align-items:center; font-size:16px}
+  .bar nav a{font-family:var(--mono); text-decoration:none; color:var(--ink-soft)}
+  .bar nav a:hover{color:var(--brown-deep)}
+  .ghbtn{font-family:var(--pixel); font-size:11px; background:var(--ink); color:var(--parchment-3);
+    padding:10px 14px; border-radius:3px; text-decoration:none; border:2px solid var(--ink)}
+  .ghbtn:hover{background:var(--brown-deep); color:#fff}
+
+  /* hero */
+  .hero{display:grid; grid-template-columns:1.05fr .95fr; gap:40px; align-items:center;
+    padding:64px 0 40px}
+  .eyebrow{font-family:var(--mono); font-size:13px; letter-spacing:2px; text-transform:uppercase;
+    color:var(--brown); margin:0 0 14px}
+  h1.title{font-family:var(--pixel); font-size:34px; line-height:1.35; margin:0 0 18px; color:var(--ink)}
+  h1.title .dim{color:var(--gold)}
+  .tagline{font-style:italic; font-size:23px; color:var(--brown-deep); margin:0 0 18px}
+  .lede{font-size:19px; color:var(--ink-soft); margin:0 0 26px; max-width:34ch}
+  .cta{display:flex; gap:14px; flex-wrap:wrap}
+  .btn{font-family:var(--pixel); font-size:12px; text-decoration:none; padding:14px 18px; border-radius:4px;
+    border:2px solid var(--ink); display:inline-flex; align-items:center; gap:8px; transition:transform .08s}
+  .btn:active{transform:translateY(2px)}
+  .btn.primary{background:var(--ink); color:var(--parchment-3)}
+  .btn.primary:hover{background:var(--brown-deep)}
+  .btn.ghost{background:transparent; color:var(--ink)}
+  .btn.ghost:hover{background:var(--parchment-2)}
+
+  /* the CRT computer + character */
+  .stage{position:relative}
+  .crt{background:var(--crt-bg); border-radius:14px; padding:16px 16px 22px;
+    border:3px solid var(--brown-deep); box-shadow:8px 8px 0 rgba(63,42,24,.35)}
+  .crt .screen{background:var(--crt-screen); border-radius:8px; min-height:210px; padding:14px 16px;
+    position:relative; overflow:hidden; border:2px solid #b9b29a}
+  .crt .screen::after{content:""; position:absolute; inset:0; pointer-events:none;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,.05) 0 2px, transparent 2px 4px)}
+  .screen .who{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-weight:700; color:#2c2a1f}
+  .screen .who .dot{width:22px; height:22px; border-radius:4px; background:var(--brown);
+    display:inline-flex; align-items:center; justify-content:center; color:#fff; font-size:12px}
+  .bubble{margin-top:12px; font-family:var(--mono); font-size:15px; color:#33301f; min-height:46px}
+  .bubble .cursor{display:inline-block; width:9px; height:18px; background:var(--brown);
+    vertical-align:-3px; animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  .crt .base{height:14px; margin:10px 12px 0; background:#11140f; border-radius:0 0 8px 8px}
+  .sprite{position:absolute; left:-26px; bottom:-22px; width:150px; filter:drop-shadow(3px 4px 0 rgba(63,42,24,.3))}
+  .sprite svg{width:100%; height:auto}
+  .sprite img{width:100%; height:auto; display:block}
+  .knob{position:absolute; right:30px; bottom:34px; width:14px; height:14px; border-radius:50%;
+    background:var(--gold); box-shadow:0 0 0 3px var(--brown-deep)}
+
+  /* generic section */
+  section{padding:54px 0; border-top:2px solid var(--ink)}
+  .kicker{font-family:var(--pixel); font-size:16px; margin:0 0 6px}
+  .sub{color:var(--ink-soft); margin:0 0 30px; max-width:60ch}
+
+  /* doubt loop */
+  .loop{display:grid; grid-template-columns:160px 1fr; gap:28px; align-items:center}
+  .loopface{background:var(--parchment-3); border:2px solid var(--ink); border-radius:10px; padding:12px; text-align:center}
+  .loopface svg, .loopface img{width:120px; height:auto; margin:0 auto; display:block}
+  .loopface .cap{font-family:var(--mono); font-size:13px; color:var(--brown); margin-top:8px; min-height:30px}
+  .chips{display:flex; flex-wrap:wrap; gap:10px}
+  .chip{font-family:var(--pixel); font-size:11px; padding:12px 14px; border:2px solid var(--ink);
+    border-radius:30px; background:var(--parchment-3); color:var(--ink-soft); transition:all .2s}
+  .chip.active{background:var(--gold); color:var(--brown-deep); transform:translateY(-2px)}
+  .chip.done{background:var(--ink); color:var(--parchment-3)}
+  .loopnote{font-style:italic; color:var(--ink-soft); margin-top:18px}
+
+  /* console */
+  .console{background:var(--crt-bg); border:3px solid var(--brown-deep); border-radius:12px;
+    padding:18px 20px; font-family:var(--mono); font-size:14.5px; color:#d7d2b4; min-height:280px;
+    box-shadow:6px 6px 0 rgba(63,42,24,.3)}
+  .console .ln{margin:2px 0; white-space:pre-wrap}
+  .c-dim{color:#9a957a} .c-grn{color:var(--crt-green)} .c-amb{color:var(--gold-soft)}
+  .c-red{color:#d98a6a} .c-quill{color:#cfc8a6; font-style:italic}
+
+  /* engines */
+  .cards{display:grid; grid-template-columns:repeat(3,1fr); gap:18px}
+  .card{background:var(--parchment-3); border:2px solid var(--ink); border-radius:10px; padding:20px;
+    box-shadow:4px 4px 0 rgba(63,42,24,.18)}
+  .card h3{font-family:var(--pixel); font-size:12px; margin:0 0 10px}
+  .card p{margin:0; font-size:16.5px; color:var(--ink-soft)}
+  .card .tag{font-family:var(--mono); font-size:12px; color:var(--brown); display:block; margin-top:12px}
+
+  /* install */
+  pre{background:var(--crt-bg); color:#e9e4c8; font-family:var(--mono); font-size:14px; line-height:1.7;
+    padding:18px 20px; border-radius:10px; overflow:auto; border:2px solid var(--brown-deep); position:relative}
+  pre .cmt{color:#9a957a}
+  .copy{position:absolute; top:10px; right:10px; font-family:var(--mono); font-size:11px; cursor:pointer;
+    background:var(--brown); color:#fff; border:none; padding:6px 10px; border-radius:5px}
+  .steps{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-bottom:22px}
+  .step{border:2px solid var(--ink); border-radius:10px; padding:16px; background:var(--parchment-3)}
+  .step b{font-family:var(--pixel); font-size:11px; color:var(--brown); display:block; margin-bottom:8px}
+
+  /* footer */
+  footer{border-top:2px solid var(--ink); padding:40px 0 60px; text-align:center}
+  .stamp{display:inline-block; font-family:var(--pixel); font-size:13px; color:#8a3b1c;
+    border:3px solid #8a3b1c; border-radius:8px; padding:10px 16px; transform:rotate(-6deg);
+    opacity:.85; margin-bottom:22px}
+  .signoff{font-style:italic; font-size:21px; color:var(--brown-deep)}
+  .signoff code{font-style:normal; font-family:var(--mono); font-size:.8em; background:var(--parchment-2);
+    padding:2px 7px; border-radius:5px}
+  .flinks{margin-top:16px; font-family:var(--mono); font-size:14px}
+  .flinks a{margin:0 10px; color:var(--ink-soft); text-decoration:none}
+  .flinks a:hover{color:var(--brown-deep)}
+
+  @media (max-width:860px){
+    .hero{grid-template-columns:1fr; gap:30px}
+    h1.title{font-size:26px}
+    .cards,.steps{grid-template-columns:1fr}
+    .loop{grid-template-columns:1fr}
+    .loopface{max-width:200px; margin:0 auto}
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="bust" viewBox="0 0 120 130">
+    <rect x="30" y="118" width="60" height="12" fill="#3f2a18"/>
+    <path d="M18 132 C18 96 36 84 60 84 C84 84 102 96 102 132 Z" fill="#171510"/>
+    <path d="M44 80 H76 V96 C76 104 44 104 44 96 Z" fill="#f3efe2"/>
+    <path d="M50 64 Q60 74 70 64 L74 86 Q60 96 46 86 Z" fill="#f3efe2"/>
+    <ellipse cx="60" cy="50" rx="22" ry="26" fill="#e7c9a6"/>
+    <path d="M30 50 C26 18 50 8 60 8 C70 8 96 16 90 52 C92 38 84 30 76 30 C70 44 50 44 44 30 C36 30 30 40 30 56 Z" fill="#241a12"/>
+    <path d="M30 48 C24 64 30 84 40 92 L34 60 Z" fill="#241a12"/>
+    <path d="M90 48 C96 64 90 84 80 92 L86 60 Z" fill="#241a12"/>
+    <ellipse cx="51" cy="48" rx="3" ry="3.4" fill="#1a140d"/>
+    <ellipse cx="69" cy="48" rx="3" ry="3.4" fill="#1a140d"/>
+    <path d="M44 40 Q51 36 57 40" stroke="#3a2a1a" stroke-width="2" fill="none"/>
+    <path d="M63 40 Q69 36 76 40" stroke="#3a2a1a" stroke-width="2" fill="none"/>
+    <path d="M48 60 Q60 66 72 60" stroke="#5a3d22" stroke-width="2.5" fill="none"/>
+    <path d="M57 66 H63 L61 76 H59 Z" fill="#2a1d11"/>
+  </symbol>
+</svg>
+
+<header class="bar">
+  <div class="wrap">
+    <span class="mark">DES<b>CARTES</b></span>
+    <nav>
+      <a href="#loop">the loop</a>
+      <a href="#console">console</a>
+      <a href="#install">install</a>
+      <a class="ghbtn" href="https://github.com/pranjalbhatia710/descartes-mcp">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="hero">
+    <div>
+      <p class="eyebrow">an mcp server for the chronically unsure</p>
+      <h1 class="title">doubt, until what<br/>remains is <span class="dim">certain.</span></h1>
+      <p class="tagline">Dubito, ergo cogito, ergo <span style="font-style:normal">commit</span>.</p>
+      <p class="lede">Descartes doubts every decision in your plan, doubts its own doubts, and answers each one from real evidence, or hands it back to you. No unexamined assumption reaches the work, so hallucination has nowhere to hide.</p>
+      <div class="cta">
+        <a class="btn primary" href="#install"><span>▸</span> install it</a>
+        <a class="btn ghost" href="https://github.com/pranjalbhatia710/descartes-mcp">read the source</a>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="crt">
+        <div class="screen">
+          <div class="who"><span class="dot">R</span> Descartes</div>
+          <div class="bubble"><span id="hero-type"></span><span class="cursor"></span></div>
+        </div>
+        <div class="base"></div>
+        <div class="knob"></div>
+      </div>
+      <figure class="sprite" id="hero-sprite" title="Click me, I dare you to doubt it" style="cursor:pointer;margin:0">
+        <img class="img-px" src="assets/descartes-idle.png" alt="René Descartes" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/>
+        <svg viewBox="0 0 120 130" style="display:none"><use href="#bust"/></svg>
+      </figure>
+    </div>
+  </div>
+</div>
+
+<section id="loop">
+  <div class="wrap">
+    <p class="kicker">the doubt loop</p>
+    <p class="sub">Draft → doubt → doubt the doubts → answer from evidence → revise → repeat. It stops the instant a pass produces no new load-bearing doubt. Twenty passes is a ceiling, never a dare.</p>
+    <div class="loop">
+      <figure class="loopface" style="margin:0">
+        <img class="img-px" id="loop-img" src="assets/descartes-ponder.png" alt="Descartes pondering" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/>
+        <svg viewBox="0 0 120 130" style="display:none"><use href="#bust"/></svg>
+        <div class="cap" id="loop-cap">pondering…</div>
+      </figure>
+      <div>
+        <div class="chips" id="loop-chips">
+          <span class="chip" data-cap="What am I even assuming?">draft</span>
+          <span class="chip" data-cap="I doubt that. And that. And that.">doubt</span>
+          <span class="chip" data-cap="Are these the right doubts?">doubt the doubts</span>
+          <span class="chip" data-cap="Show me the evidence.">answer</span>
+          <span class="chip" data-cap="The plan, but wiser.">revise</span>
+          <span class="chip" data-cap="Nothing new to fear. Done.">converged</span>
+        </div>
+        <p class="loopnote">“An assumption unexamined is not worth shipping.”</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="console">
+  <div class="wrap">
+    <p class="kicker">a doubt, examined</p>
+    <p class="sub">Every answer resolves against real evidence (your codebase, or a cited Exa fact), or it becomes a question only you can answer. Low-confidence is never asserted.</p>
+    <div class="console" id="console" aria-label="example doubt log"></div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="kicker">two engines, one method</p>
+    <p class="sub">Bring a key, or bring nothing. Descartes degrades instead of failing.</p>
+    <div class="cards">
+      <div class="card">
+        <h3>the panel</h3>
+        <p>A panel of distinct Fireworks model families argues it out. Where they agree, it’s settled. Where they disagree, that is real uncertainty.</p>
+        <span class="tag">FIREWORKS_API_KEY</span>
+      </div>
+      <div class="card">
+        <h3>claude alone</h3>
+        <p>No panel? The client’s own model runs the full loop, single-minded and thorough, via MCP sampling or OpenRouter.</p>
+        <span class="tag">just press play</span>
+      </div>
+      <div class="card">
+        <h3>no keys, no problem</h3>
+        <p>With nothing at all, a deterministic operator-template path keeps the lights on. It never hard-fails — Descartes would not allow it.</p>
+        <span class="tag">the floor</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <p class="kicker">three steps to certainty</p>
+    <div class="steps">
+      <div class="step"><b>1 · install</b>pip install -e . — and the <code>descartes</code> command appears.</div>
+      <div class="step"><b>2 · (optional) keys</b>Copy <code>.env.example</code>, add your own. Missing keys just degrade.</div>
+      <div class="step"><b>3 · wire it up</b>Add to your Claude Code MCP config and start doubting.</div>
+    </div>
+    <pre><button class="copy" onclick="cp(this)">copy</button><span class="cmt"># 1. install</span>
+git clone https://github.com/pranjalbhatia710/descartes-mcp &amp;&amp; cd descartes-mcp
+pip install -e .
+
+<span class="cmt"># 2. prove the loop converges (no keys needed)</span>
+descartes --selftest
+
+<span class="cmt"># 3. then ask Claude: "use descartes to doubt this plan"</span></pre>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="stamp">CONVERGED ✓</div>
+    <p class="signoff">Cogito, ergo <code>git commit</code>.</p>
+    <div class="flinks">
+      <a href="https://github.com/pranjalbhatia710/descartes-mcp">GitHub</a>·
+      <a href="https://github.com/pranjalbhatia710/descartes-mcp/blob/main/README.md">README</a>·
+      <a href="https://github.com/pranjalbhatia710/descartes-mcp/actions">CI</a>·
+      <a href="#">back to the top</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  var EPIGRAPHS = [
+    "I think, therefore I doubt.",
+    "Give me evidence, or give me NEEDS_HUMAN.",
+    "I doubted this very sentence. It survived.",
+    "The only thing I take on faith is your API key.",
+    "Twenty passes is a ceiling, not a dare.",
+    "An unexamined assumption is not worth shipping.",
+    "I doubt, therefore I check the codebase."
+  ];
+
+  function typeInto(el, text, speed, done){
+    el.textContent = ""; var i = 0;
+    (function tick(){
+      if(i <= text.length){ el.textContent = text.slice(0,i++); setTimeout(tick, speed); }
+      else if(done){ setTimeout(done, 2200); }
+    })();
+  }
+  var heroEl = document.getElementById('hero-type'), e = 0;
+  function heroLoop(){ typeInto(heroEl, EPIGRAPHS[e++ % EPIGRAPHS.length], 38, heroLoop); }
+  heroLoop();
+
+  document.getElementById('hero-sprite').addEventListener('click', function(){
+    e = Math.floor(Math.random()*EPIGRAPHS.length);
+    typeInto(heroEl, EPIGRAPHS[e], 22, heroLoop);
+  });
+
+  var chips = [].slice.call(document.querySelectorAll('#loop-chips .chip'));
+  var cap = document.getElementById('loop-cap');
+  var loopImg = document.getElementById('loop-img');
+  var faces = ['assets/descartes-ponder.png','assets/descartes-write.png'];
+  var li = 0;
+  function stepLoop(){
+    chips.forEach(function(c,idx){
+      c.classList.remove('active');
+      c.classList.toggle('done', idx < li);
+    });
+    if(li < chips.length){
+      var c = chips[li]; c.classList.add('active');
+      cap.textContent = c.getAttribute('data-cap');
+      if(loopImg){ loopImg.src = faces[li % faces.length]; }
+      li++;
+      setTimeout(stepLoop, li === chips.length ? 2600 : 1300);
+    } else {
+      li = 0; setTimeout(stepLoop, 1400);
+    }
+  }
+  stepLoop();
+
+  var SCRIPT = [
+    ['c-dim','$ descartes.doubt("Cache /report with Redis", context="report.py …")'],
+    ['c-quill','  …pausing to doubt everything…'],
+    ['c-grn','✓ pass 1  assumption   — stable cache key?      CONFIRMED  (models.py)'],
+    ['c-grn','✓ pass 1  inversion    — fail open, not closed?  REFUTED    (it was wrong)'],
+    ['c-grn','✓ pass 2  named_source — is SETEX atomic?        CONFIRMED  (redis.io)'],
+    ['c-amb','? pass 3  second_order — eviction policy?        NEEDS_HUMAN (the panel split)'],
+    ['c-quill','  I have doubted all I can. The rest is yours.'],
+    ['c-grn','▸ converged in 4 passes  ·  ceiling was 20, never the target'],
+    ['c-red','needs_user → "Which eviction policy fits your budget?"']
+  ];
+  var con = document.getElementById('console'), s = 0;
+  function runConsole(){
+    if(s < SCRIPT.length){
+      var d = document.createElement('div');
+      d.className = 'ln ' + SCRIPT[s][0];
+      con.appendChild(d);
+      typeInto(d, SCRIPT[s][1], 9, function(){ s++; setTimeout(runConsole, 260); });
+    } else {
+      setTimeout(function(){ con.innerHTML=''; s=0; runConsole(); }, 4200);
+    }
+  }
+  runConsole();
+
+  function cp(btn){
+    var pre = btn.parentElement.cloneNode(true);
+    pre.querySelector('.copy').remove();
+    navigator.clipboard.writeText(pre.textContent.trim()).then(function(){
+      var t = btn.textContent; btn.textContent = 'copied ✓';
+      setTimeout(function(){ btn.textContent = t; }, 1400);
+    });
+  }
+</script>
+</body>
+</html>

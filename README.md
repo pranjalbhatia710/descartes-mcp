@@ -4,6 +4,8 @@
 
 [![CI](https://github.com/pranjalbhatia710/descartes-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/pranjalbhatia710/descartes-mcp/actions/workflows/ci.yml)
 
+🪶 **[Landing page →](https://pranjalbhatia710.github.io/descartes-mcp/)** &nbsp;·&nbsp; `descartes --epigraph` for a passing thought from the man himself.
+
 An MCP server that, on a prompt, **doubts every decision in a plan, doubts its own
 doubts, and answers them — grounding every answer in real evidence** — iterating
 until the plan stops producing new load-bearing doubts. Then it hands back a
