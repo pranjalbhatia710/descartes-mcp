@@ -124,7 +124,7 @@ class OpenRouterReasoner(Reasoner):
     async def complete(self, system, user, n=1):
         text = await _chat(
             OPENROUTER_URL, self.api_key, self.model, system, user, self.timeout,
-            extra_headers={"HTTP-Referer": "https://github.com/descartes-mcp/descartes",
+            extra_headers={"HTTP-Referer": "https://github.com/pranjalbhatia710/descartes-mcp",
                            "X-Title": "descartes-mcp"},
         )
         return [text] if text else []

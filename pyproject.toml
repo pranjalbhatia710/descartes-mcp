@@ -23,8 +23,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/descartes-mcp/descartes"
-Repository = "https://github.com/descartes-mcp/descartes"
+Homepage = "https://github.com/pranjalbhatia710/descartes-mcp"
+Repository = "https://github.com/pranjalbhatia710/descartes-mcp"
 
 [project.scripts]
 descartes = "descartes.server:main"

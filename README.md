@@ -2,6 +2,8 @@
 
 > **doubt, until what remains is certain.**
 
+[![CI](https://github.com/pranjalbhatia710/descartes-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/pranjalbhatia710/descartes-mcp/actions/workflows/ci.yml)
+
 An MCP server that, on a prompt, **doubts every decision in a plan, doubts its own
 doubts, and answers them — grounding every answer in real evidence** — iterating
 until the plan stops producing new load-bearing doubts. Then it hands back a
@@ -54,7 +56,7 @@ so that is forbidden by construction.
 
 ```bash
 # 1. install
-git clone https://github.com/descartes-mcp/descartes && cd descartes
+git clone https://github.com/pranjalbhatia710/descartes-mcp && cd descartes-mcp
 pip install -e .
 
 # 2. (optional) bring your own keys — copy names only, fill in your .env
