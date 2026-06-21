@@ -39,3 +39,6 @@ jobs:
 
       - name: Convergence benchmark (asserts invariants)
         run: python -m benchmark.bench
+
+      - name: Coverage benchmark (assumptions examined vs left unexamined)
+        run: python -m benchmark.coverage

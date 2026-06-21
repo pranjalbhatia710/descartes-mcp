@@ -173,6 +173,40 @@ Every doubt is tagged with one operator (shipped as data in
 
 ---
 
+## Benchmarks — how much better is doubting?
+
+The honest metric isn't accuracy (that tracks whatever model you plug in). It is:
+*of a plan's load-bearing assumptions, how many reach the work unexamined?* On a
+seeded fixture of 6 real-shaped plans with **19 hand-labeled assumptions**
+([`benchmark/coverage.py`](benchmark/coverage.py)):
+
+| approach | examined | grounded from evidence | asked of you | reach work **unexamined** |
+|---|---|---|---|---|
+| ship the plan as-is | 0 (0%) | 0 | 0 | 19 (**100%**) |
+| **Descartes** | 19 (100%) | 12 | 7 | 0 (**0%**) |
+
+Unexamined assumptions reaching the work fall from **100% → 0%**. Of the 19 it
+surfaces, Descartes grounds **12 itself** and hands you only the **7** that
+genuinely need a human. This is the conservative *floor* — deterministic, in the
+spirit of [The Asker](https://github.com/pranjalbhatia710/the-asker)'s synthetic
+floor. A real model only widens the gap by catching assumptions the labels missed
+and recursing deeper.
+
+**Convergence** ([`benchmark/bench.py`](benchmark/bench.py)) — it stops the moment
+a pass adds no new doubt, and a runaway is capped:
+
+| scenario | doubt depth | passes | converged |
+| --- | --- | --- | --- |
+| trivial | 0 | 1 | ✅ |
+| moderate | 3 | 4 | ✅ |
+| deep | 11 | 12 | ✅ |
+| spiral-guard | 40 | **20 (capped)** | ❌ by design |
+
+Convergence is exactly `depth + 1` passes and never exceeds 20. Both benchmarks
+run in CI on every push.
+
+---
+
 ## Part of a bigger idea — meet The Asker
 
 Descartes has a sibling: **[The Asker](https://github.com/pranjalbhatia710/the-asker)**
@@ -201,29 +235,19 @@ plan and watch it refuse to guess.
 ```bash
 pip install -e ".[dev]"      # pytest + ruff
 ruff check descartes/ tests/ benchmark/
-pytest -q                    # 69 tests, no network (all backends are mocked)
-python -m benchmark.bench    # convergence benchmark (also asserts its invariants)
+pytest -q                    # tests, no network (all backends are mocked)
+python -m benchmark.bench    # convergence benchmark (see Benchmarks above)
+python -m benchmark.coverage # coverage benchmark (see Benchmarks above)
 ```
 
-The suite locks down the load-bearing invariants — the loop always terminates and
+The suite locks down the load-bearing invariants: the loop always terminates and
 never exceeds the hard ceiling of 20, it converges as soon as a pass adds no new
-doubt, nothing is asserted without evidence (ungroundable → `NEEDS_HUMAN`,
+doubt, it recurses (questioning its own answers) bounded by depth and a node
+budget, nothing is asserted without evidence (ungroundable → `NEEDS_HUMAN`,
 low-confidence Exa → `UNKNOWN`), `needs_user` is exactly the `NEEDS_HUMAN` doubts,
 and panel disagreement escalates to the human. `tests/test_regressions.py` carries
 one guard per bug found by the adversarial audit. CI (`.github/workflows/ci.yml`)
-runs lint + tests + the self-test + the benchmark on Python 3.10–3.13.
-
-Benchmark (instant stub reasoner — measures loop machinery, not network):
-
-| scenario | doubt depth | passes | converged |
-| --- | --- | --- | --- |
-| trivial | 0 | 1 | ✅ |
-| moderate | 3 | 4 | ✅ |
-| deep | 11 | 12 | ✅ |
-| spiral-guard | 40 | **20 (capped)** | ❌ by design |
-
-Convergence is exactly `depth + 1` passes and never exceeds 20 — a 40-doubt
-"spiral" is capped at 20 and reported as not converged.
+runs lint + tests + the self-test + both benchmarks on Python 3.10–3.13.
 
 ## Safety
 

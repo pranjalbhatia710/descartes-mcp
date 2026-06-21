@@ -117,6 +117,8 @@
   .card h3{font-family:var(--pixel); font-size:12px; margin:0 0 10px}
   .card p{margin:0; font-size:16.5px; color:var(--ink-soft)}
   .card .tag{font-family:var(--mono); font-size:12px; color:var(--brown); display:block; margin-top:12px}
+  .card .big{font-family:var(--pixel); font-size:21px; line-height:1.35; color:var(--brown-deep); margin:0 0 12px}
+  .card.stat p b{color:var(--ink)}
 
   /* install */
   pre{background:var(--crt-bg); color:#e9e4c8; font-family:var(--mono); font-size:14px; line-height:1.7;
@@ -185,6 +187,7 @@
     <nav>
       <a href="#loop">the loop</a>
       <a href="#console">console</a>
+      <a href="#numbers">benchmarks</a>
       <a href="#install">install</a>
       <a href="#asker">the asker</a>
       <a class="ghbtn" href="https://github.com/pranjalbhatia710/descartes-mcp">GitHub</a>
@@ -297,6 +300,27 @@ pip install -e .
 descartes --selftest
 
 <span class="cmt"># 3. then ask Claude: "use descartes to doubt this plan"</span></pre>
+  </div>
+</section>
+
+<section id="numbers">
+  <div class="wrap">
+    <p class="kicker">by the numbers</p>
+    <p class="sub">On a seeded fixture of 6 plans with 19 load-bearing assumptions. A plan you just ship examines none of them. Both benchmarks run in CI on every push.</p>
+    <div class="cards">
+      <div class="card stat">
+        <div class="big">100% → 0%</div>
+        <p>assumptions reaching the work <b>unexamined</b>, ship-as-is versus Descartes</p>
+      </div>
+      <div class="card stat">
+        <div class="big">12 of 19</div>
+        <p>grounded by Descartes itself; only <b>7</b> are handed back to you</p>
+      </div>
+      <div class="card stat">
+        <div class="big">depth + 1</div>
+        <p>passes to converge, capped at 20, never a spiral</p>
+      </div>
+    </div>
   </div>
 </section>
 
