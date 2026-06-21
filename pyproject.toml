@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "descartes-mcp"
+version = "0.1.0"
+description = "Descartes — doubt, until what remains is certain. An MCP server that doubts every plan decision until it converges, grounded in real evidence."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+keywords = ["mcp", "claude", "agents", "planning", "reasoning", "fireworks", "exa"]
+authors = [{ name = "Descartes MCP contributors" }]
+dependencies = [
+    "mcp>=1.2.0",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[project.urls]
+Homepage = "https://github.com/descartes-mcp/descartes"
+Repository = "https://github.com/descartes-mcp/descartes"
+
+[project.scripts]
+descartes = "descartes.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["descartes"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+# Tests drive async code with asyncio.run(), so no asyncio plugin is required.
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+# E501: a few prompt/system strings are intentionally long and kept readable inline.
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]  # tests tweak sys.path / env before importing the package under test

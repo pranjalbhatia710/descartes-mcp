@@ -1,0 +1,15 @@
+{
+  "_comment": "Drop this into your Claude Code MCP config (e.g. project .mcp.json). Keys are read from your environment via ${VAR} expansion — never hard-code real keys here, and never commit a file that contains them. Every key is optional; with none set, Descartes uses its deterministic fallback.",
+  "mcpServers": {
+    "descartes": {
+      "command": "descartes",
+      "args": [],
+      "env": {
+        "FIREWORKS_API_KEY": "${FIREWORKS_API_KEY}",
+        "EXA_API_KEY": "${EXA_API_KEY}",
+        "OPENROUTER_API_KEY": "${OPENROUTER_API_KEY}",
+        "DESCARTES_PANEL_SIZE": "3"
+      }
+    }
+  }
+}
